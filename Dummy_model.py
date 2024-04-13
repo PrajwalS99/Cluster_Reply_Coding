@@ -5,6 +5,12 @@ from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 import spacy
 from azure.storage.blob import BlobServiceClient
+import pytesseract
+from PIL import Image
+import io
+
+# Initialize Tesseract OCR
+pytesseract.pytesseract.tesseract_cmd = r'<path_to_tesseract_executable>'
 
 app = Flask(__name__)
 
@@ -31,9 +37,14 @@ def extract_text_from_blob(post_url):
   blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
 
   # Download text from blob
-  text = blob_client.download_blob().readall().decode('utf-8')
+  blob_data  = blob_client.download_blob().readall()
+  # Use PIL to open image from blob data
+  image = Image.open(io.BytesIO(blob_data))
+    
+  # Perform OCR to extract text from image
+  extracted_text = pytesseract.image_to_string(image) # If there is already text extracted, we can use UTF-8 encoding directly.
 
-  return text
+  return extracted_text
 
 # Function to preprocess text. Basically does the stemming and lemmatization.
 def preprocess(text):
@@ -47,7 +58,7 @@ class SemiSupervisedClassifier:
     def __init__(self, topics):
         self.topics = topics
         self.vectorizer = TfidfVectorizer()
-        self.clusterer = KMeans(n_clusters=len(topics))
+        self.clusterer = KMeans(n_clusters=len(topics))  #  For text, use naive bayes, I've resarched it is better for text.
         self.classifier = RandomForestClassifier(n_estimators=100)
         self.labeled_data = []  # List to store labeled data (text, label)
 
@@ -68,12 +79,12 @@ class SemiSupervisedClassifier:
             self.labeled_data.append({"text": X_unlabeled_text[i], "label": topics[cluster_label]})
 
         # Train classifier on labeled data
-        X_labeled_vectorized = self.vectorizer.transform(X_labeled_text)
+        X_labeled_vectorized = self.vectorizer.transform(X_labeled_text) # could also use pipeline here from sklearn.pipeline. 
         self.classifier.fit(X_labeled_vectorized, y_labeled)
 
     def predict_proba(self, X):
         X_vectorized = self.vectorizer.transform(X)
-        probabilities = self.classifier.predict_proba(X_vectorized)
+        probabilities = self.classifier.predict_proba(X_vectorized) # could also pront classification report for better understanding
         return probabilities
 
     
@@ -99,3 +110,4 @@ def classify():
 if __name__ == '__main__':
     app.run(debug=True)
 
+ 
