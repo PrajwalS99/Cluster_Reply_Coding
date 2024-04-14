@@ -1,4 +1,3 @@
-from flask import Flask, request, jsonify
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestClassifier
@@ -12,7 +11,6 @@ import io
 # Initialize Tesseract OCR
 pytesseract.pytesseract.tesseract_cmd = r'<path_to_tesseract_executable>'
 
-app = Flask(__name__)
 
 # Define topics based on your requirements (adjust as needed)
 topics = ['Sports', 'Travel', 'Fashion', 'Music', 'Food', 'Technology', 
@@ -21,23 +19,9 @@ topics = ['Sports', 'Travel', 'Fashion', 'Music', 'Food', 'Technology',
 # Load spaCy English model
 nlp = spacy.load("en_core_web_sm")
 
-# Dummy function to extract text from Blob Storage
-def parse_url(url):
-  container_name, blob_name = url.split('/', 1)
-  return container_name, blob_name
 
-def extract_text_from_blob(post_url):
-  container_name, blob_name = parse_url(post_url) # Parse URL to get container name and blob name of the instagram post
-
-  # Connect to Blob Storage (replace with your connection string)
-  connect_str = "<the_connection_string>"
-  blob_service_client = BlobServiceClient.from_connection_string(connect_str)
-
-  # Get blob client
-  blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-
-  # Download text from blob
-  blob_data  = blob_client.download_blob().readall()
+def extract_text_from_blob(blob_data):
+  # Connect to Blob Storage
   # Use PIL to open image from blob data
   image = Image.open(io.BytesIO(blob_data))
     
@@ -87,27 +71,27 @@ class SemiSupervisedClassifier:
         probabilities = self.classifier.predict_proba(X_vectorized) # could also pront classification report for better understanding
         return probabilities
 
+
+def main(blob_data):
+    # Instantiate the classifier
+    classifier = SemiSupervisedClassifier(topics)
+
+    # Extract text from Blob Storage
+    post_text = extract_text_from_blob(blob_data)
+
+    # Preprocess text
+    preprocessed_text = preprocess(post_text)
+
+    # Train the classifier
+    classifier.train([preprocessed_text])
+
+    # Predict probabilities
+    probabilities = classifier.predict_proba([preprocessed_text])[0]
+    probabilities_dict = {topic: prob for topic, prob in zip(topics, probabilities)}
     
-# Instantiate the classifier
-classifier = SemiSupervisedClassifier(topics)
-
-@app.route('/classify', methods=['POST'])
-def classify():
-  # Get text from request body, prioritizing photo URL if available
-  post_text = request.json.get('photo_url', '') or request.json.get('text', '')
-
-  if post_text.startswith('http'):  # Assuming a photo URL
-    try:
-      post_text = extract_text_from_blob(post_text)
-    except Exception as e:
-      return jsonify({'error': f'Failed to extract text from the image: {str(e)}'}), 500
-
-  preprocessed_text = preprocess(post_text)
-  probabilities = classifier.predict_proba([preprocessed_text])[0]
-  probabilities_dict = {topic: prob for topic, prob in zip(topics, probabilities)}
-  return jsonify(probabilities_dict)
+    return probabilities_dict  # For debugging purposes, to see the probabilities
+    # You can return this probabilities_dict as JSON response in your actual API implementation
 
 if __name__ == '__main__':
-    app.run(debug=True)
-
+    main()
  
