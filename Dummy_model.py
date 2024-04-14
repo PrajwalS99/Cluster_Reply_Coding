@@ -8,7 +8,7 @@ import pytesseract
 from PIL import Image
 import io
 
-# Initialize Tesseract OCR
+# Initialize Tesseract OCR to get text from Images
 pytesseract.pytesseract.tesseract_cmd = r'<path_to_tesseract_executable>'
 
 
@@ -42,7 +42,7 @@ class SemiSupervisedClassifier:
     def __init__(self, topics):
         self.topics = topics
         self.vectorizer = TfidfVectorizer()
-        self.clusterer = KMeans(n_clusters=len(topics))  #  For text, use naive bayes, I've resarched it is better for text.
+        self.clusterer = KMeans(n_clusters=len(topics))  #  For text, use naive bayes, I've resarched that it is usually better for text.
         self.classifier = RandomForestClassifier(n_estimators=100)
         self.labeled_data = []  # List to store labeled data (text, label)
 
